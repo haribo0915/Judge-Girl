@@ -5,8 +5,11 @@ import org.springframework.web.bind.annotation.*;
 import tw.waterball.judgegirl.academy.domain.usecases.homework.*;
 import tw.waterball.judgegirl.commons.token.TokenService;
 import tw.waterball.judgegirl.primitives.Homework;
+// import tw.waterball.judgegirl.springboot.academy.presenters.GetStudentsHomeworkProgressPresenter;
+import tw.waterball.judgegirl.springboot.academy.presenters.StudentsHomeworkProgressPresenter;
 import tw.waterball.judgegirl.springboot.academy.view.HomeworkProgress;
 import tw.waterball.judgegirl.springboot.academy.view.HomeworkView;
+import tw.waterball.judgegirl.springboot.academy.view.StudentsHomeworkProgressView;
 import tw.waterball.judgegirl.submissionapi.views.SubmissionView;
 
 import java.util.LinkedList;
@@ -26,6 +29,7 @@ public class HomeworkController {
     private final CreateHomeworkUseCase createHomeworkUseCase;
     private final GetHomeworkUseCase getHomeworkUseCase;
     private final GetHomeworkProgressUseCase getHomeworkProgressUseCase;
+    private final GetStudentsHomeworkProgressUseCase getStudentsHomeworkProgressUseCase;
     private final GetAllHomeworkUseCase getAllHomeworkUseCase;
     private final DeleteHomeworkUseCase deleteHomeworkUseCase;
     private final AddHomeworkProblemsUseCase addHomeworkProblemUseCase;
@@ -91,6 +95,17 @@ public class HomeworkController {
         tokenService.ifAdminToken(authorization,
                 token -> deleteHomeworkProblemsUseCase.execute(new DeleteHomeworkProblemsUseCase.Request(homeworkId, problemIds)));
     }
+    @PostMapping("/students/homework/{homeworkId}/progress")
+    public StudentsHomeworkProgressView getStudentsHomeworkProgress(@RequestHeader("Authorization") String authorization,
+                                                                    @PathVariable int homeworkId,
+                                                                    @RequestBody List<String> emails) {
+        var request = new GetStudentsHomeworkProgressUseCase.Request(homeworkId, emails);
+        return tokenService.returnIfAdmin(authorization, token -> {
+            var presenter = new StudentsHomeworkProgressPresenter();
+            getStudentsHomeworkProgressUseCase.execute(request, presenter);
+            return presenter.present();
+        });
+    }
 }
 
 class CreateHomeworkPresenter implements CreateHomeworkUseCase.Presenter {
@@ -155,4 +170,5 @@ class GetHomeworkProgressPresenter implements GetHomeworkProgressUseCase.Present
     }
 
 }
+
 

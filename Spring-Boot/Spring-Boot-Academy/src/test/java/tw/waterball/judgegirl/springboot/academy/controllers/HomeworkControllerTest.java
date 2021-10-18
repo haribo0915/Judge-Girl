@@ -1,7 +1,9 @@
 package tw.waterball.judgegirl.springboot.academy.controllers;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import lombok.SneakyThrows;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,8 +13,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.ResultActions;
+
 import tw.waterball.judgegirl.academy.domain.repositories.HomeworkRepository;
 import tw.waterball.judgegirl.academy.domain.usecases.homework.CreateHomeworkUseCase;
+import tw.waterball.judgegirl.primitives.Student;
 import tw.waterball.judgegirl.primitives.problem.JudgeStatus;
 import tw.waterball.judgegirl.primitives.problem.Problem;
 import tw.waterball.judgegirl.primitives.stubs.ProblemStubs;
@@ -23,7 +27,10 @@ import tw.waterball.judgegirl.springboot.academy.SpringBootAcademyApplication;
 import tw.waterball.judgegirl.springboot.academy.view.HomeworkProgress;
 import tw.waterball.judgegirl.springboot.academy.view.HomeworkProgress.BestRecord;
 import tw.waterball.judgegirl.springboot.academy.view.HomeworkView;
+import tw.waterball.judgegirl.springboot.academy.view.StudentsHomeworkProgressView;
 import tw.waterball.judgegirl.springboot.profiles.Profiles;
+import tw.waterball.judgegirl.studentapi.clients.FakeStudentServiceDriver;
+import tw.waterball.judgegirl.studentapi.clients.view.StudentView;
 import tw.waterball.judgegirl.submissionapi.clients.SubmissionServiceDriver;
 import tw.waterball.judgegirl.submissionapi.views.SubmissionView;
 import tw.waterball.judgegirl.testkit.AbstractSpringBootTest;
@@ -39,8 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static tw.waterball.judgegirl.commons.utils.MapUtils.map;
 import static tw.waterball.judgegirl.primitives.stubs.SubmissionStubBuilder.submission;
 import static tw.waterball.judgegirl.springboot.academy.controllers.ExamControllerTest.LANG_ENV;
+import static tw.waterball.judgegirl.studentapi.clients.view.StudentView.toViewModel;
 
 @ActiveProfiles(Profiles.JWT)
 @ContextConfiguration(classes = SpringBootAcademyApplication.class)
@@ -52,9 +61,14 @@ public class HomeworkControllerTest extends AbstractSpringBootTest {
     public static final int STUDENT_ID = 11;
     private static final String HOMEWORK_PATH = "/api/homework";
     private static final String HOMEWORK_PROGRESS_PATH = "/api/students/{studentId}/homework/{homeworkId}/progress";
+    private static final String GET_STUDENTS_HOMEWORK_PROGRESS_PATH = "/api/students/homework/{homeworkId}/progress";
+    private static final String GET_GROUPS_HOMEWORK_PROGRESS_PATH = "/api/groups/homework/{homeworkId}/progress";
 
     @Autowired
     private FakeProblemServiceDriver problemServiceDriver;
+
+    @Autowired
+    private FakeStudentServiceDriver studentServiceDriver;
 
     @MockBean
     private SubmissionServiceDriver submissionServiceDriver;
@@ -156,7 +170,39 @@ public class HomeworkControllerTest extends AbstractSpringBootTest {
         HomeworkProgress homeworkProgress = getHomeworkProgress(STUDENT_ID, homework.id);
 
         assertEquals(homework, homeworkProgress.homework);
-        homeworkProgressShouldIncludeTwoBestRecords(homework, homeworkProgress, bestRecord1, bestRecord2);
+        homeworkProgressShouldIncludeFourBestRecords(homework, homeworkProgress, bestRecord1, bestRecord2);
+    }
+
+    @DisplayName("Given a homework consists of two problems [1, 2] and the students achieved AC in 1 and CE in 2," +
+            "When get the student's homework progress, " +
+            "Should respond the four best records [AC, CE] within the homework progress")
+    @Test
+    public void testGetStudentsHomeworkProgress() throws Exception {
+        var studentA = signUpStudent("studentA", "studentA@example.com", "password");
+        var studentB = signUpStudent("studentB", "studentB@example.com", "password");
+        var homework = createHomeworkConsistsOfProblems(PROBLEM1_ID, PROBLEM2_ID);
+        var bestRecord1 = achieveBestRecord(PROBLEM1_ID, submission("AC").AC(1, 1, 100).build(studentA.id, PROBLEM1_ID, LANG_ENV));
+        var bestRecord2 = achieveBestRecord(PROBLEM2_ID, submission("CE").CE(100).build(studentA.id, PROBLEM2_ID, LANG_ENV));
+        var bestRecord3 = achieveBestRecord(PROBLEM1_ID, submission("AC").AC(1, 1, 100).build(studentB.id, PROBLEM1_ID, LANG_ENV));
+        var bestRecord4 = achieveBestRecord(PROBLEM2_ID, submission("CE").CE(100).build(studentB.id, PROBLEM2_ID, LANG_ENV));
+
+        var homeworkProgress = getStudentsHomeworkProgress(homework.id, studentA.email, studentB.email);
+
+        assertTrue(homeworkProgress.getScoreBoard().keySet().contains(studentA.email));
+        var studentAEmail = homeworkProgress.scoreBoard.get(studentA.email);
+        var studentBEmail = homeworkProgress.scoreBoard.get(studentB.email);
+        int recordGrade1 = bestRecord1.getVerdict().getTotalGrade();
+        int recordGrade2 = bestRecord2.getVerdict().getTotalGrade();
+        int recordGrade3 = bestRecord3.getVerdict().getTotalGrade();
+        int recordGrade4 = bestRecord4.getVerdict().getTotalGrade();
+        progressShouldHaveGrade(studentAEmail,
+                map(bestRecord1.getProblemId(), bestRecord2.getProblemId()).to(recordGrade1, recordGrade2));
+        progressShouldHaveGrade(studentBEmail,
+                map(bestRecord3.getProblemId(), bestRecord4.getProblemId()).to(recordGrade3, recordGrade4));
+    }
+
+    private void progressShouldHaveGrade(StudentsHomeworkProgressView.StudentProgress examineeRecord, Map<Integer, Integer> problemIdToExpectedScore) {
+        assertEquals(examineeRecord.getQuestionScores(), problemIdToExpectedScore);
     }
 
     private HomeworkView createHomeworkWithProblems(String homeworkName, int... problemIds) {
@@ -176,9 +222,9 @@ public class HomeworkControllerTest extends AbstractSpringBootTest {
         return bestRecord;
     }
 
-    private void homeworkProgressShouldIncludeTwoBestRecords(HomeworkView homework,
-                                                             HomeworkProgress homeworkProgress,
-                                                             SubmissionView... submissionViews) {
+    private void homeworkProgressShouldIncludeFourBestRecords(HomeworkView homework,
+                                                              HomeworkProgress homeworkProgress,
+                                                              SubmissionView... submissionViews) {
         assertEquals(homework, homeworkProgress.homework);
         Map<Integer, BestRecord> progress = homeworkProgress.progress;
         assertEquals(submissionViews.length, progress.size());
@@ -276,5 +322,17 @@ public class HomeworkControllerTest extends AbstractSpringBootTest {
                 .andExpect(status().isOk()), HomeworkProgress.class);
     }
 
+    private StudentsHomeworkProgressView getStudentsHomeworkProgress(int homeworkId, String... studentEmails) throws Exception {
+        return getBody(mockMvc.perform(
+                        withAdminToken(post(GET_STUDENTS_HOMEWORK_PROGRESS_PATH, homeworkId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(toJson(studentEmails)))
+                .andExpect(status().isOk()), StudentsHomeworkProgressView.class);
+    }
 
+    private StudentView signUpStudent(String name, String email, String password) {
+        Student newStudent = new Student(name, email, password);
+        studentServiceDriver.addStudent(newStudent);
+        return toViewModel(newStudent);
+    }
 }
