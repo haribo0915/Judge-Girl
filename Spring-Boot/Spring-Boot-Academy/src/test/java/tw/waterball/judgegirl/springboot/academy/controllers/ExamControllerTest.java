@@ -137,6 +137,7 @@ class ExamControllerTest extends AbstractSpringBootTest {
         Problem p1 = problemTemplate(testcaseGrades).id(PROBLEM_ID).title("Title_1").build(),
                 p2 = problemTemplate(testcaseGrades).id(OTHER_PROBLEM_ID).title("Title_2").build(),
                 p3 = problemTemplate(testcaseGrades).id(ANOTHER_PROBLEM_ID).title("Title_3").build();
+
         problem = toViewModel(p1);
         submissionWith2ACs = randomizedSubmission(p1, STUDENT_A_ID, 2);
         problemServiceDriver.addProblemView(problem);
@@ -772,6 +773,9 @@ class ExamControllerTest extends AbstractSpringBootTest {
         assertEquals(expectedQuestion.getQuota(), actualQuestion.getQuota());
         assertEquals(expectedQuestion.getScore(), actualQuestion.getMaxScore());
         assertEquals(expectedQuestion.getQuestionOrder(), actualQuestion.getQuestionOrder());
+
+        assertEquals(problem.isArchived(), actualQuestion.getArchived());
+        assertEquals(true, actualQuestion.isNotFound());
         assertEquals(problem.getTitle(), actualQuestion.getProblemTitle());
     }
 
