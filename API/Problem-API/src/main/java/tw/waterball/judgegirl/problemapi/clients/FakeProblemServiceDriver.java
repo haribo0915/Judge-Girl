@@ -24,6 +24,10 @@ public class FakeProblemServiceDriver implements ProblemServiceDriver {
         return problemView;
     }
 
+    public void deleteProblemView(int problemId){
+        problems.remove(problemId);
+    }
+
     @Override
     public FileResource downloadProvidedCodes(int problemId, String languageEnvName, String providedCodesFileId) throws UnsupportedOperationException {
         throw new UnsupportedOperationException();

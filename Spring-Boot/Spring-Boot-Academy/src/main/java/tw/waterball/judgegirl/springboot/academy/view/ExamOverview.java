@@ -8,6 +8,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
+import static java.util.Optional.ofNullable;
+
 @Data
 @Builder
 @AllArgsConstructor
@@ -50,7 +52,7 @@ public class ExamOverview {
             questionItem.notFound = false;
             return questionItem;
         }
-        
+
         public static QuestionItem toViewModel(Question question) {
             return QuestionItem.builder()
                     .examId(question.getExamId())
@@ -59,6 +61,14 @@ public class ExamOverview {
                     .maxScore(question.getScore())
                     .notFound(true)
                     .questionOrder(question.getQuestionOrder()).build();
+        }
+
+        public Optional<String> getProblemTitle() {
+            return ofNullable(problemTitle);
+        }
+
+        public Optional<Boolean> getArchived() {
+            return ofNullable(archived);
         }
     }
 
